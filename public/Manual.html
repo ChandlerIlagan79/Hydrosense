@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manual</title>
+  <link rel="stylesheet" href="hompage.css">
+  <link rel="stylesheet" href="manual.css">
+</head>
+<body>
+  <header>
+    <h1 id="myH1">HydroSense</h1>
+    <div class="h-content">
+      <!--dropdown-->
+      <div class="navbar">
+        <details class="dropdown">
+          <summary class="dropdown-button">Menu</summary>
+          <div class="dropdown-content">
+            <a href="reminders.html">Reminders</a>
+            <a href="Testing.html">Testing</a>
+            <a href="badges.html">Badges</a>
+            <a href="Manual.html">Manual</a>
+            <a href="homepage.html">Home</a>
+            <a href="combo.html" id="logout">Log Out</a>
+          </div>
+        </details>
+      </div>
+    </div>
+  </header>
+
+  <!--THIS IS THE MAIN CONTENT-->
+  <div class="manual-container">
+    <div class="manual-card">
+      <div class="manual-header">
+        <div class="manual-icon">📖</div>
+        <h2>User Manual</h2>
+      </div>
+      <p class="manual-description">
+        Learn how to use HydroSense to monitor your hydration levels effectively.
+      </p>
+      
+      <div class="video-container">
+        <iframe 
+          src="https://youtu.be/qJyBtJtzQYE?si=ANpPEIR0QiN-iaQJ" 
+          title="YouTube video player" 
+          frameborder="0" 
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+          referrerpolicy="strict-origin-when-cross-origin" 
+          allowfullscreen>
+        </iframe>
+      </div>
+    </div>
+  </div>
+
+  <script src="manual.js"></script>
+</body>
+</html>
