@@ -121,7 +121,10 @@ async function connectBluetooth() {
     // Step 3: Register session with backend BEFORE enabling notifications to avoid data arriving before session exists
     const sessionCreated = await startBackendSession(bluetoothDevice.name, bluetoothDevice.id);
     if (!sessionCreated) {
-      throw new Error('Failed to register session with backend');
+      bluetoothDevice.gatt.disconnect(); // don't leave the ESP32 connected
+      updateStatus('disconnected', 'Backend session failed');
+      showMessage('❌ Bluetooth connected, but the server rejected the session. Check the console.', 'error');
+      return;
     }
 
     // Now enable notifications (only after session is active)
