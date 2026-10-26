@@ -296,12 +296,17 @@ async function disconnectBluetooth() {
 }
 
 async function onDisconnected() {
+  if (intentionalDisconnect) {
+    intentionalDisconnect = false;
+    return;
+  }
+
   console.log('🔴 Device disconnected unexpectedly');
-  
+
   await endBackendSession('device_disconnected');
   stopHeartbeat();
   resetBluetoothUI();
-  
+
   alert('⚠️ Device disconnected. Please reconnect to continue testing.');
 }
 
