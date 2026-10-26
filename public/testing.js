@@ -14,6 +14,7 @@ let bluetoothCharacteristic = null;
 let currentSessionId = null;
 let heartbeatInterval = null;
 let dataBuffer = '';
+let intentionalDisconnect = false; //newly added 
 let pendingDataQueue = []; // store readings received before session is established
 
 
