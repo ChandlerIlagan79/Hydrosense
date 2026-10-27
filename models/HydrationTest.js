@@ -12,9 +12,9 @@ const hydrationTestSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  testDuration: {
+   testDuration: {
     type: Number,
-    required: true
+    default: 0
   },
   sensorReading: Number,
   notes: String,
