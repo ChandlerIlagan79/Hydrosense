@@ -92,14 +92,13 @@ bleSessionSchema.statics.timeoutOldSessions = async function() {
 };
 
 // Hooks for logging session lifecycle
-bleSessionSchema.pre('save', function(next) {
+bleSessionSchema.pre('save', function() {
   if (this.isNew) {
     console.log(`[BLESession] Creating session - deviceId=${this.deviceId}, deviceName=${this.deviceName}, userId=${this.userId}`);
   } else {
     const modified = this.modifiedPaths();
     console.log(`[BLESession] Updating session ${this._id} - modified: ${modified.join(', ')}`);
   }
-  next();
 });
 
 bleSessionSchema.post('save', function(doc) {

@@ -99,14 +99,13 @@ bleReadingSchema.virtual('ageInSeconds').get(function() {
 });
 
 // Lifecycle hooks for logging
-bleReadingSchema.pre('save', function(next) {
+bleReadingSchema.pre('save', function() {
   if (this.isNew) {
     console.log(`[BLEReading] Creating reading - sessionId=${this.sessionId}, userId=${this.userId}, hydration=${this.hydrationLevel}`);
   } else {
     const modified = this.modifiedPaths();
     console.log(`[BLEReading] Updating reading ${this._id} - modified: ${modified.join(', ')}`);
   }
-  next();
 });
 
 bleReadingSchema.post('save', function(doc) {
