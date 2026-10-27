@@ -16,6 +16,9 @@ let heartbeatInterval = null;
 let dataBuffer = '';
 let intentionalDisconnect = false; //newly added 
 let offlineMode = false; // true when the server is not working
+let testRunning = false;      // true only after the user presses Start Test
+let testTimeout = null;
+let startBtnText = 'Start Test';
 let pendingDataQueue = []; // store readings received before session is established
 
 
@@ -111,8 +114,6 @@ async function connectBluetooth() {
       10000
     );
     console.log('✅ Connected to GATT server');
-    testStartTime = performance.now();
-    console.log('⏱ Test timer started');
 
 
     const service = await server.getPrimaryService(BLUETOOTH_CONFIG.SERVICE_UUID);
@@ -345,8 +346,50 @@ function resetBluetoothUI() {
  * 
  * ONLY TEMPORARY, REPLACE WITH REAL TEST FLOW LATER
  */
-
+// Called by the Start Test button
 function startTest() {
+  const connected = bluetoothDevice && bluetoothDevice.gatt && bluetoothDevice.gatt.connected && bluetoothCharacteristic;
+  if (connected) {
+    startRealTest();        // use data from the ESP32
+  } else {
+    startSimulatedTest();   // fallback demo with random data
+  }
+}
+
+function startRealTest() {
+  const btn = document.getElementById('startTestButton');
+  if (!btn || testRunning) return;
+
+  startBtnText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Testing...';
+
+  testRunning = true;
+  testStartTime = performance.now();   // timer starts NOW
+  testDuration = null;
+  dataBuffer = '';                     // drop any half-received message
+
+  showMessage('🔬 Test started - waiting for device reading...', 'info');
+
+  // Give up after 15 seconds so the button never stays stuck
+  clearTimeout(testTimeout);
+  testTimeout = setTimeout(() => {
+    testRunning = false;
+    testStartTime = null;
+    resetTestButton();
+    showMessage('❌ No reading received from the device. Try again.', 'error');
+  }, 15000);
+}
+
+function resetTestButton() {
+  const btn = document.getElementById('startTestButton');
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = startBtnText;
+  }
+}
+
+function startSimulatedTest() {
   const startTime = performance.now(); // START TIMER
 
   const btn = document.getElementById('startTestButton');
@@ -568,6 +611,15 @@ function handleDataReceived(event) {
     }
     const payload = check.normalized;
 
+     // Ignore readings unless the user pressed Start Test
+    if (!testRunning) {
+      console.log('ℹ️ Reading ignored - no test running');
+      return;
+    }
+    testRunning = false;
+    clearTimeout(testTimeout);
+    resetTestButton();
+
     if (offlineMode) {
       processReadingLocally(payload);          // server is down
     } else if (!currentSessionId) {
@@ -578,6 +630,10 @@ function handleDataReceived(event) {
   } catch (error) {
     console.error('Error in handleDataReceived:', error);
     dataBuffer = '';
+      testRunning = false;
+  clearTimeout(testTimeout);
+  testStartTime = null;
+  resetTestButton();
   }
 }
 
