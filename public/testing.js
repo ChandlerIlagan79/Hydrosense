@@ -15,6 +15,7 @@ let currentSessionId = null;
 let heartbeatInterval = null;
 let dataBuffer = '';
 let intentionalDisconnect = false; //newly added 
+let offlineMode = false; // true when the server is not working
 let pendingDataQueue = []; // store readings received before session is established
 
 
@@ -120,12 +121,14 @@ async function connectBluetooth() {
     bluetoothCharacteristic = characteristic;
 
     // Step 3: Register session with backend BEFORE enabling notifications to avoid data arriving before session exists
-    const sessionCreated = await startBackendSession(bluetoothDevice.name, bluetoothDevice.id);
-    if (!sessionCreated) {
-      bluetoothDevice.gatt.disconnect(); // don't leave the ESP32 connected
-      updateStatus('disconnected', 'Backend session failed');
-      showMessage('❌ Bluetooth connected, but the server rejected the session. Check the console.', 'error');
-      return;
+        const sessionCreated = await startBackendSession(bluetoothDevice.name, bluetoothDevice.id);
+    if (sessionCreated) {
+      offlineMode = false;
+    } else {
+      // Server problem: keep Bluetooth connected and show results on the page only
+      offlineMode = true;
+      console.warn('⚠️ Server unavailable - running in local mode');
+      showMessage('⚠️ Server unavailable. Results show but are not saved.', 'info');
     }
 
     // Now enable notifications (only after session is active)
@@ -143,7 +146,7 @@ async function connectBluetooth() {
     document.getElementById('connectBtn').onclick = disconnectBluetooth;
 
     console.log('✅ Ready to receive data');
-    showMessage('✅ Connected successfully!', 'success');
+    if (!offlineMode) showMessage('✅ Connected successfully!', 'success');
 
   } catch (error) {
     console.error('Bluetooth connection error:', error);
@@ -286,6 +289,7 @@ function stopHeartbeat() {
 
 async function disconnectBluetooth() {
   if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+     intentionalDisconnect = true;
     bluetoothDevice.gatt.disconnect();
     console.log('🔴 Disconnected from device');
   }
@@ -432,7 +436,8 @@ function clientConvertArduinoData(arduinoData) {
   const g = parseInt(arduinoData.g) || 0;
   const b = parseInt(arduinoData.b) || 0;
   const brightness = (r + g + b) / 3;
-  const colorValue = Math.round((brightness / 255) * 1023);
+   // Darker urine = higher number = more dehydrated
+  const colorValue = Math.round((1 - brightness / 255) * 1023);
 
   const sg = parseFloat(arduinoData.sg) || 1.020;
   const sgNormalized = Math.max(0, Math.min(1, (sg - 1.010) / 0.020));
@@ -526,48 +531,77 @@ function clientCalculateHydrationLevel(color, frequency, volume) {
 
 function handleDataReceived(event) {
   try {
-    const value = event.target.value;
     const decoder = new TextDecoder('utf-8');
-    const chunk = decoder.decode(value);
-    
-    dataBuffer += chunk;
-    
-    console.log('📥 Raw BLE chunk:', chunk);
-    
-    // Arduino sends: {"color":"Light Yellow","r":255,"g":255,"b":200,"sg":"1.020","ph":"6.5","status":"Normal"}
-    if (dataBuffer.includes('}')) {
-      try {
-        const data = JSON.parse(dataBuffer);
-        console.log('✅ Parsed Arduino data:', data);
-        
-        // Validate and normalize data before buffering/sending
-        const check = validateAndNormalizeSensorData(data);
-        if (!check.valid) {
-          console.warn('❌ Invalid sensor reading received – dropping', check.errors, data);
-          // Show concise message to the user (don't spam)
-          showMessage('❌ Received invalid sensor data (dropped)', 'error');
-        } else {
-          const payload = check.normalized;
-          // If session is not ready, buffer the reading and flush after session starts
-          if (!currentSessionId) {
-            console.warn('📥 Received BLE data before session ready - buffering');
-            pendingDataQueue.push(payload);
-            showMessage('⏳ Buffering data until session is established', 'info');
-          } else {
-            // Send to backend for processing
-            sendDataToBackend(payload);
-          }
-        }
-        
-        dataBuffer = '';
-        
-      } catch (parseError) {
-        console.log('⏳ Waiting for more data... (incomplete JSON)');
-      }
+    dataBuffer += decoder.decode(event.target.value);
+
+    // Safety: don't let the buffer grow forever
+    if (dataBuffer.length > 1000) {
+      console.warn('Buffer too large, resetting');
+      dataBuffer = '';
+      return;
+    }
+
+    // Wait until the closing brace arrives
+    if (!dataBuffer.includes('}')) return;
+
+    // Cut out one complete message and always clear the buffer
+    const start = dataBuffer.indexOf('{');
+    const end = dataBuffer.lastIndexOf('}');
+    const jsonText = (start !== -1 && end > start) ? dataBuffer.slice(start, end + 1) : '';
+    dataBuffer = '';
+    if (!jsonText) return;
+
+    let data;
+    try {
+      data = JSON.parse(jsonText);
+    } catch (e) {
+      console.warn('Bad JSON from device, skipping:', jsonText);
+      return;
+    }
+    console.log('✅ Parsed Arduino data:', data);
+
+    const check = validateAndNormalizeSensorData(data);
+    if (!check.valid) {
+      console.warn('❌ Invalid sensor reading – dropping', check.errors, data);
+      showMessage('❌ Received invalid sensor data (dropped)', 'error');
+      return;
+    }
+    const payload = check.normalized;
+
+    if (offlineMode) {
+      processReadingLocally(payload);          // server is down
+    } else if (!currentSessionId) {
+      pendingDataQueue.push(payload);          // wait for session
+    } else {
+      sendDataToBackend(payload);              // normal path
     }
   } catch (error) {
     console.error('Error in handleDataReceived:', error);
     dataBuffer = '';
+  }
+}
+
+async function processReadingLocally(payload) {
+  const converted = clientConvertArduinoData(payload);
+  const analysis = clientCalculateHydrationLevel(
+    converted.color,
+    converted.frequency,
+    converted.volume
+  );
+
+  await displayResults({
+    id: 'local_' + Date.now(),
+    hydrationLevel: analysis.level,
+    percentage: analysis.percentage,
+    timestamp: new Date().toISOString(),
+    metrics: analysis.metrics
+  });
+  showRatingSystem(analysis.level);
+
+  if (testStartTime) {
+    testDuration = ((performance.now() - testStartTime) / 1000).toFixed(2);
+    showMessage(`⏱ Test completed in ${testDuration} seconds`, 'success');
+    testStartTime = null;
   }
 }
 
@@ -925,6 +959,7 @@ async function checkActiveSession() {
 
     if (data.success && data.hasActiveSession) {
       console.log('⚠️ Found abandoned session, cleaning up...');
+            currentSessionId = data.session?.id ?? data.session?._id ?? data.sessionId ?? null;
       // Clean up abandoned session
       await endBackendSession('page_reload');
     }
