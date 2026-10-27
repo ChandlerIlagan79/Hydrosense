@@ -192,7 +192,7 @@ exports.getActiveSession = async (req, res) => {
  */
 exports.receiveData = async (req, res) => {
   try {
-    const { sessionId, sensorData, timestamp } = req.body;
+    const { sessionId, sensorData, timestamp, testDuration } = req.body;
     const userId = req.user.id;
 
     // Verify session exists and is active
@@ -270,6 +270,7 @@ exports.receiveData = async (req, res) => {
       hydrationTest = new HydrationTest({
         userId,
         hydrationLevel: hydrationAnalysis.level,
+        testDuration: parseFloat(testDuration) || 0,   // <-- add this
         sensorReading: convertedData.color,
         notes: `SG: ${sensorData.sg}, pH: ${sensorData.ph}, Color: ${sensorData.color}`,
         isFirstTest
