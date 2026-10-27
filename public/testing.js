@@ -611,15 +611,6 @@ function handleDataReceived(event) {
     }
     const payload = check.normalized;
 
-     // Ignore readings unless the user pressed Start Test
-    if (!testRunning) {
-      console.log('ℹ️ Reading ignored - no test running');
-      return;
-    }
-    testRunning = false;
-    clearTimeout(testTimeout);
-    resetTestButton();
-
     if (offlineMode) {
       processReadingLocally(payload);          // server is down
     } else if (!currentSessionId) {
@@ -630,10 +621,30 @@ function handleDataReceived(event) {
   } catch (error) {
     console.error('Error in handleDataReceived:', error);
     dataBuffer = '';
-      testRunning = false;
-  clearTimeout(testTimeout);
-  testStartTime = null;
-  resetTestButton();
+  }
+}
+
+async function processReadingLocally(payload) {
+  const converted = clientConvertArduinoData(payload);
+  const analysis = clientCalculateHydrationLevel(
+    converted.color,
+    converted.frequency,
+    converted.volume
+  );
+
+  await displayResults({
+    id: 'local_' + Date.now(),
+    hydrationLevel: analysis.level,
+    percentage: analysis.percentage,
+    timestamp: new Date().toISOString(),
+    metrics: analysis.metrics
+  });
+  showRatingSystem(analysis.level);
+
+  if (testStartTime) {
+    testDuration = ((performance.now() - testStartTime) / 1000).toFixed(2);
+    showMessage(`⏱ Test completed in ${testDuration} seconds`, 'success');
+    testStartTime = null;
   }
 }
 
